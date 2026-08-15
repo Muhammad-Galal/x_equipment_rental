@@ -57,6 +57,26 @@ class RentalOrder(models.Model):
         currency_field="currency_id",
         store=True,
     )
+    actual_return_date = fields.Date(
+        readonly=True,
+        copy=False,
+        tracking=True,
+    )
+    is_overdue = fields.Boolean(
+        readonly=True,
+        copy=False,
+        tracking=True,
+    )
+    overdue_days = fields.Integer(
+        readonly=True,
+        copy=False,
+    )
+    late_fee_amount = fields.Monetary(
+        currency_field="currency_id",
+        readonly=True,
+        copy=False,
+        tracking=True,
+    )
     state = fields.Selection(
         [
             ("draft", "Draft"),
@@ -170,15 +190,19 @@ class RentalOrder(models.Model):
         # Re-check inside the equipment lock to cover concurrent confirmations.
         self.line_ids._raise_booking_conflicts(forced_state="confirmed")
         self.write({"state": "confirmed"})
+        self._apply_overdue_status()
         self._generate_sales_documents()
 
     def action_mark_out(self):
         self._check_can_mark_out()
         self.write({"state": "out"})
+        self._apply_overdue_status()
 
     def action_return(self):
         self._check_can_return()
-        self.write({"state": "returned"})
+        return_date = fields.Date.context_today(self)
+        self.write({"state": "returned", "actual_return_date": return_date})
+        self._apply_overdue_status(reference_date=return_date, include_returned=True)
 
     def action_mark_invoiced(self):
         self._check_can_invoice()
@@ -187,6 +211,56 @@ class RentalOrder(models.Model):
     def action_cancel(self):
         self._check_can_cancel()
         self.write({"state": "cancelled"})
+        self._clear_overdue_status()
+
+    @api.model
+    def _get_late_fee_per_day(self):
+        return float(
+            self.env["ir.config_parameter"].sudo().get_param(
+                "x_equipment_rental.rental_late_fee_per_day", 0.0
+            )
+            or 0.0
+        )
+
+    def _compute_overdue_values(self, reference_date):
+        self.ensure_one()
+        if not self.rental_end_date:
+            return {"is_overdue": False, "overdue_days": 0, "late_fee_amount": 0.0}
+        overdue_days = max((reference_date - self.rental_end_date).days, 0)
+        late_fee_per_day = self._get_late_fee_per_day()
+        line_count = max(len(self.line_ids), 1)
+        return {
+            "is_overdue": overdue_days > 0,
+            "overdue_days": overdue_days,
+            "late_fee_amount": overdue_days * late_fee_per_day * line_count,
+        }
+
+    def _apply_overdue_status(self, reference_date=None, include_returned=False):
+        reference_date = reference_date or fields.Date.context_today(self)
+        eligible_states = set(self._active_booking_states)
+        if include_returned:
+            eligible_states.add("returned")
+        for order in self:
+            if order.state not in eligible_states:
+                continue
+            values = order._compute_overdue_values(reference_date)
+            order.write(values)
+
+    def _clear_overdue_status(self):
+        self.write(
+            {
+                "is_overdue": False,
+                "overdue_days": 0,
+                "late_fee_amount": 0.0,
+                "actual_return_date": False,
+            }
+        )
+
+    @api.model
+    def _cron_update_overdue_rentals(self):
+        today = fields.Date.context_today(self)
+        active_orders = self.search([("state", "in", list(self._active_booking_states))])
+        active_orders._apply_overdue_status(reference_date=today)
 
     def _get_rental_service_product(self):
         self.ensure_one()

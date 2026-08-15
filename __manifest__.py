@@ -17,6 +17,7 @@
         "security/ir.model.access.csv",
         "data/rental_product_data.xml",
         "data/rental_sequence.xml",
+        "data/rental_cron.xml",
         "views/maintenance_equipment_views.xml",
         "views/rental_order_views.xml",
         "views/equipment_maintenance_views.xml",

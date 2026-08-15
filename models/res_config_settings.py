@@ -20,3 +20,8 @@ class ResConfigSettings(models.TransientModel):
         domain="[('sale_ok', '=', True), ('type', '=', 'service')]",
         config_parameter="x_equipment_rental.rental_service_product_id",
     )
+    rental_late_fee_per_day = fields.Float(
+        string="Late Fee Per Day",
+        config_parameter="x_equipment_rental.rental_late_fee_per_day",
+        help="Fixed late fee charged per overdue day and per rented equipment line.",
+    )

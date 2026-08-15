@@ -13,6 +13,9 @@
                     <setting id="rental_service_product_setting" help="Product used on generated sales orders and customer invoices for rental charges.">
                         <field name="rental_service_product_id"/>
                     </setting>
+                    <setting id="rental_late_fee_setting" help="Fixed late fee charged per overdue day and per rented equipment line.">
+                        <field name="rental_late_fee_per_day"/>
+                    </setting>
                 </block>
             </app>
         </field>

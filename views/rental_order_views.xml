@@ -12,6 +12,9 @@
                 <field name="duration_days"/>
                 <field name="equipment_count"/>
                 <field name="amount_total"/>
+                <field name="is_overdue"/>
+                <field name="overdue_days" optional="show"/>
+                <field name="late_fee_amount" optional="show"/>
                 <field name="user_id"/>
                 <field name="state"/>
                 <field name="company_id" groups="base.group_multi_company"/>
@@ -56,7 +59,13 @@
                         <group>
                             <field name="rental_start_date"/>
                             <field name="rental_end_date"/>
+                            <field name="actual_return_date" readonly="1"/>
                             <field name="duration_days" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="is_overdue" readonly="1"/>
+                            <field name="overdue_days" readonly="1" invisible="not is_overdue"/>
+                            <field name="late_fee_amount" readonly="1"/>
                         </group>
                     </group>
                     <notebook>
@@ -81,6 +90,7 @@
                                 <field name="sale_order_id" readonly="1"/>
                                 <field name="account_move_id" readonly="1"/>
                                 <field name="amount_total" readonly="1"/>
+                                <field name="late_fee_amount" readonly="1"/>
                             </group>
                         </page>
                     </notebook>
@@ -107,6 +117,7 @@
                 <filter name="returned" string="Returned" domain="[('state', '=', 'returned')]"/>
                 <filter name="invoiced" string="Invoiced" domain="[('state', '=', 'invoiced')]"/>
                 <filter name="cancelled" string="Cancelled" domain="[('state', '=', 'cancelled')]"/>
+                <filter name="overdue" string="Overdue" domain="[('is_overdue', '=', True)]"/>
                 <group>
                     <filter name="group_by_partner" string="Customer" domain="[]" context="{'group_by': 'partner_id'}"/>
                     <filter name="group_by_responsible" string="Responsible" domain="[]" context="{'group_by': 'user_id'}"/>
