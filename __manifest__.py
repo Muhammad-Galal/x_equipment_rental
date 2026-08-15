@@ -15,6 +15,7 @@
     "data": [
         "security/security.xml",
         "security/ir.model.access.csv",
+        "data/rental_product_data.xml",
         "data/rental_sequence.xml",
         "views/maintenance_equipment_views.xml",
         "views/rental_order_views.xml",

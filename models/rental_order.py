@@ -170,6 +170,7 @@ class RentalOrder(models.Model):
         # Re-check inside the equipment lock to cover concurrent confirmations.
         self.line_ids._raise_booking_conflicts(forced_state="confirmed")
         self.write({"state": "confirmed"})
+        self._generate_sales_documents()
 
     def action_mark_out(self):
         self._check_can_mark_out()
@@ -186,6 +187,130 @@ class RentalOrder(models.Model):
     def action_cancel(self):
         self._check_can_cancel()
         self.write({"state": "cancelled"})
+
+    def _get_rental_service_product(self):
+        self.ensure_one()
+        product_id = int(
+            self.env["ir.config_parameter"].sudo().get_param(
+                "x_equipment_rental.rental_service_product_id", 0
+            )
+            or 0
+        )
+        product = self.env["product.product"].browse(product_id).exists()
+        if not product:
+            template = self.env.ref(
+                "x_equipment_rental.product_rental_service_template",
+                raise_if_not_found=False,
+            )
+            product = template.product_variant_id if template else False
+        if not product:
+            raise UserError(
+                _(
+                    "Configure a rental service product in Settings before confirming rental orders."
+                )
+            )
+        return product
+
+    def _prepare_billing_line_name(self, line):
+        pricing_label = {
+            "daily": _("Daily"),
+            "weekly": _("Weekly"),
+            "mixed": _("Weekly + Daily"),
+        }.get(line.pricing_type, _("Rental"))
+        return _(
+            "%(equipment)s\nRental Period: %(start)s to %(end)s\nPricing: %(pricing)s",
+            equipment=line.equipment_id.display_name,
+            start=line.rental_start_date,
+            end=line.rental_end_date,
+            pricing=pricing_label,
+        )
+
+    def _prepare_sale_order_vals(self):
+        self.ensure_one()
+        product = self._get_rental_service_product()
+        order_lines = []
+        for line in self.line_ids:
+            order_lines.append(
+                (
+                    0,
+                    0,
+                    {
+                        "product_id": product.id,
+                        "name": self._prepare_billing_line_name(line),
+                        "product_uom_qty": 1.0,
+                        "price_unit": line.price_subtotal,
+                    },
+                )
+            )
+        return {
+            "partner_id": self.partner_id.id,
+            "company_id": self.company_id.id,
+            "origin": self.name,
+            "client_order_ref": self.name,
+            "order_line": order_lines,
+        }
+
+    def _prepare_invoice_vals(self):
+        self.ensure_one()
+        product = self._get_rental_service_product()
+        invoice_lines = []
+        for line in self.line_ids:
+            invoice_lines.append(
+                (
+                    0,
+                    0,
+                    {
+                        "product_id": product.id,
+                        "name": self._prepare_billing_line_name(line),
+                        "quantity": 1.0,
+                        "price_unit": line.price_subtotal,
+                        "tax_ids": [(6, 0, product.taxes_id.ids)],
+                    },
+                )
+            )
+        return {
+            "move_type": "out_invoice",
+            "partner_id": self.partner_id.id,
+            "company_id": self.company_id.id,
+            "invoice_origin": self.name,
+            "invoice_user_id": self.user_id.id,
+            "invoice_line_ids": invoice_lines,
+        }
+
+    def _generate_sales_documents(self):
+        sale_order_model = self.env["sale.order"]
+        account_move_model = self.env["account.move"]
+        for order in self:
+            if order.sale_order_id or order.account_move_id:
+                continue
+            mode = self.env["ir.config_parameter"].sudo().get_param(
+                "x_equipment_rental.rental_sale_integration_mode", "sale_order"
+            )
+            if mode == "sale_order":
+                sale_order = sale_order_model.create(order._prepare_sale_order_vals())
+                sale_order.action_confirm()
+                order.sale_order_id = sale_order
+            elif mode == "customer_invoice":
+                invoice = account_move_model.create(order._prepare_invoice_vals())
+                order.account_move_id = invoice
+
+    def action_view_sale_order(self):
+        self.ensure_one()
+        if not self.sale_order_id:
+            raise UserError(_("No sales order has been generated for this rental order."))
+        action = self.env["ir.actions.actions"]._for_xml_id("sale.action_orders")
+        action["views"] = [(False, "form")]
+        action["res_id"] = self.sale_order_id.id
+        return action
+
+    def action_view_invoice(self):
+        self.ensure_one()
+        if not self.account_move_id:
+            raise UserError(_("No customer invoice has been generated for this rental order."))
+        action = self.env["ir.actions.actions"]._for_xml_id("account.action_move_out_invoice_type")
+        action["views"] = [(False, "form")]
+        action["res_id"] = self.account_move_id.id
+        return action
 
 
 class RentalOrderLine(models.Model):
