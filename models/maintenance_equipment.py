@@ -1,6 +1,7 @@
 from datetime import datetime, time
 
 from odoo import _, api, fields, models
+from odoo.exceptions import ValidationError
 
 
 class MaintenanceEquipment(models.Model):
@@ -245,3 +246,41 @@ class MaintenanceEquipment(models.Model):
             "default_owner_user_id": self.env.user.id,
         }
         return action
+
+
+class MaintenanceRequest(models.Model):
+    _inherit = "maintenance.request"
+
+    @api.constrains("equipment_id", "schedule_date", "schedule_end", "done", "archive")
+    def _check_rental_conflicts(self):
+        active_requests = self.filtered(
+            lambda request: request.equipment_id
+            and request.schedule_date
+            and request.schedule_end
+            and not request.done
+            and not request.archive
+        )
+        if not active_requests:
+            return
+
+        rental_line_model = self.env["x.rental.order.line"]
+        for request in active_requests:
+            start_date = request.schedule_date.date()
+            end_date = request.schedule_end.date()
+            overlapping_line = rental_line_model.search(
+                [
+                    ("equipment_id", "=", request.equipment_id.id),
+                    ("state", "in", ("confirmed", "out")),
+                    ("rental_start_date", "<=", end_date),
+                    ("rental_end_date", ">=", start_date),
+                ],
+                limit=1,
+            )
+            if overlapping_line:
+                raise ValidationError(
+                    _(
+                        "Equipment %(equipment)s is already assigned to rental order %(order)s during the selected maintenance period.",
+                        equipment=request.equipment_id.display_name,
+                        order=overlapping_line.order_id.display_name,
+                    )
+                )

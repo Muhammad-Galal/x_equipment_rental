@@ -1,5 +1,5 @@
 from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
+from odoo.exceptions import LockError, UserError, ValidationError
 
 
 class RentalOrder(models.Model):
@@ -82,6 +82,8 @@ class RentalOrder(models.Model):
     )
     note = fields.Html()
 
+    _active_booking_states = ("confirmed", "out")
+
     @api.depends("rental_start_date", "rental_end_date")
     def _compute_duration_days(self):
         for order in self:
@@ -110,6 +112,12 @@ class RentalOrder(models.Model):
             ):
                 raise ValidationError(_("The rental end date must be on or after the start date."))
 
+    @api.constrains("line_ids", "state")
+    def _check_required_lines(self):
+        for order in self:
+            if order.state in self._active_booking_states and not order.line_ids:
+                raise ValidationError(_("A rental order must contain at least one equipment line."))
+
     @api.model_create_multi
     def create(self, vals_list):
         sequence = self.env["ir.sequence"]
@@ -117,6 +125,67 @@ class RentalOrder(models.Model):
             if vals.get("name", _("New")) == _("New"):
                 vals["name"] = sequence.next_by_code("x.rental.order") or _("New")
         return super().create(vals_list)
+
+    def _check_can_confirm(self):
+        for order in self:
+            if order.state != "draft":
+                raise UserError(_("Only draft rental orders can be confirmed."))
+            if not order.line_ids:
+                raise ValidationError(_("Add at least one equipment line before confirming the rental order."))
+
+    def _check_can_mark_out(self):
+        for order in self:
+            if order.state != "confirmed":
+                raise UserError(_("Only confirmed rental orders can be marked as Out."))
+
+    def _check_can_return(self):
+        for order in self:
+            if order.state != "out":
+                raise UserError(_("Only rental orders in Out state can be returned."))
+
+    def _check_can_invoice(self):
+        for order in self:
+            if order.state != "returned":
+                raise UserError(_("Only returned rental orders can be marked as invoiced."))
+
+    def _check_can_cancel(self):
+        for order in self:
+            if order.state not in ("draft", "confirmed"):
+                raise UserError(_("Rental orders can only be cancelled from Draft or Confirmed state."))
+
+    def _lock_equipment_for_confirmation(self):
+        equipment = self.line_ids.mapped("equipment_id").sorted("id")
+        if not equipment:
+            return
+        try:
+            equipment.lock_for_update()
+        except LockError as err:
+            raise ValidationError(
+                _("Some equipment records are being booked by another transaction. Please retry.")
+            ) from err
+
+    def action_confirm(self):
+        self._check_can_confirm()
+        self._lock_equipment_for_confirmation()
+        # Re-check inside the equipment lock to cover concurrent confirmations.
+        self.line_ids._raise_booking_conflicts(forced_state="confirmed")
+        self.write({"state": "confirmed"})
+
+    def action_mark_out(self):
+        self._check_can_mark_out()
+        self.write({"state": "out"})
+
+    def action_return(self):
+        self._check_can_return()
+        self.write({"state": "returned"})
+
+    def action_mark_invoiced(self):
+        self._check_can_invoice()
+        self.write({"state": "invoiced"})
+
+    def action_cancel(self):
+        self._check_can_cancel()
+        self.write({"state": "cancelled"})
 
 
 class RentalOrderLine(models.Model):
@@ -172,9 +241,10 @@ class RentalOrderLine(models.Model):
         string="Equipment Category",
     )
     name = fields.Char(
-        required=True,
-        compute="_compute_name",
+        string='Description',
+        related='equipment_id.name',
         store=True,
+        readonly=True,
     )
     daily_rate = fields.Monetary(
         required=True,
@@ -211,19 +281,6 @@ class RentalOrderLine(models.Model):
         ),
     ]
 
-    @api.depends("equipment_id", "rental_start_date", "rental_end_date")
-    def _compute_name(self):
-        for line in self:
-            equipment_name = line.equipment_id.display_name or _("Equipment")
-            if line.rental_start_date and line.rental_end_date:
-                line.name = _(
-                    "%(equipment)s (%(start)s to %(end)s)",
-                    equipment=equipment_name,
-                    start=line.rental_start_date,
-                    end=line.rental_end_date,
-                )
-            else:
-                line.name = equipment_name
 
     @api.depends("rental_start_date", "rental_end_date")
     def _compute_duration_days(self):
@@ -264,3 +321,53 @@ class RentalOrderLine(models.Model):
                 vals.setdefault("daily_rate", equipment.daily_rental_rate)
                 vals.setdefault("weekly_rate", equipment.weekly_rental_rate)
         return super().create(vals_list)
+
+    @api.constrains("equipment_id", "rental_start_date", "rental_end_date", "state")
+    def _check_booking_conflicts(self):
+        self._raise_booking_conflicts()
+
+    def _raise_booking_conflicts(self, forced_state=None):
+        active_lines = self.filtered(lambda line: line.equipment_id and line.rental_start_date and line.rental_end_date)
+        if not active_lines:
+            return
+
+        equipment_model = self.env["maintenance.equipment"]
+        for line in active_lines:
+            effective_state = forced_state or line.state
+            if effective_state not in RentalOrder._active_booking_states:
+                continue
+            overlapping_line = self.search(
+                [
+                    ("id", "!=", line.id),
+                    ("equipment_id", "=", line.equipment_id.id),
+                    ("state", "in", RentalOrder._active_booking_states),
+                    ("rental_start_date", "<=", line.rental_end_date),
+                    ("rental_end_date", ">=", line.rental_start_date),
+                ],
+                limit=1,
+            )
+            if overlapping_line:
+                raise ValidationError(
+                    _(
+                        "Equipment %(equipment)s is already booked on rental order %(order)s during the selected period.",
+                        equipment=line.equipment_id.display_name,
+                        order=overlapping_line.order_id.display_name,
+                    )
+                )
+
+            maintenance_conflict = self.env["maintenance.request"].search(
+                equipment_model._get_maintenance_overlap_domain(
+                    line.rental_start_date,
+                    line.rental_end_date,
+                    company_id=line.company_id.id,
+                    equipment_ids=line.equipment_id.ids,
+                ),
+                limit=1,
+            )
+            if maintenance_conflict:
+                raise ValidationError(
+                    _(
+                        "Equipment %(equipment)s is scheduled for maintenance in the selected rental period.",
+                        equipment=line.equipment_id.display_name,
+                    )
+                )
