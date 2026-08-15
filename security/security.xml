@@ -25,4 +25,76 @@
         <field name="privilege_id" ref="x_equipment_rental.res_groups_privilege_equipment_rental"/>
         <field name="implied_ids" eval="[(4, ref('x_equipment_rental.group_rental_user'))]"/>
     </record>
+
+    <data noupdate="1">
+
+        <record id="rental_order_rule_user" model="ir.rule">
+            <field name="name">Rental users can access their own rental orders</field>
+            <field name="model_id" ref="model_x_rental_order"/>
+            <field name="domain_force">[('user_id', '=', user.id)]</field>
+            <field name="groups" eval="[(4, ref('x_equipment_rental.group_rental_user'))]"/>
+        </record>
+
+        <record id="rental_order_rule_manager" model="ir.rule">
+            <field name="name">Rental managers can access all rental orders</field>
+            <field name="model_id" ref="model_x_rental_order"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('x_equipment_rental.group_rental_manager'))]"/>
+        </record>
+
+        <record id="rental_order_company_rule" model="ir.rule">
+            <field name="name">Rental order multi-company rule</field>
+            <field name="model_id" ref="model_x_rental_order"/>
+            <field name="domain_force">[('company_id', 'in', company_ids + [False])]</field>
+        </record>
+
+        <record id="rental_order_line_rule_user" model="ir.rule">
+            <field name="name">Rental users can access their own rental lines</field>
+            <field name="model_id" ref="model_x_rental_order_line"/>
+            <field name="domain_force">[('order_id.user_id', '=', user.id)]</field>
+            <field name="groups" eval="[(4, ref('x_equipment_rental.group_rental_user'))]"/>
+        </record>
+
+        <record id="rental_order_line_rule_manager" model="ir.rule">
+            <field name="name">Rental managers can access all rental lines</field>
+            <field name="model_id" ref="model_x_rental_order_line"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('x_equipment_rental.group_rental_manager'))]"/>
+        </record>
+
+        <record id="rental_order_line_company_rule" model="ir.rule">
+            <field name="name">Rental order line multi-company rule</field>
+            <field name="model_id" ref="model_x_rental_order_line"/>
+            <field name="domain_force">[('company_id', 'in', company_ids + [False])]</field>
+        </record>
+
+        <record id="rental_equipment_rule_user" model="ir.rule">
+            <field name="name">Rental users can access equipment in their companies</field>
+            <field name="model_id" ref="maintenance.model_maintenance_equipment"/>
+            <field name="domain_force">[('company_id', 'in', company_ids + [False])]</field>
+            <field name="groups" eval="[(4, ref('x_equipment_rental.group_rental_user'))]"/>
+        </record>
+
+        <record id="rental_equipment_rule_manager" model="ir.rule">
+            <field name="name">Rental managers can access all equipment</field>
+            <field name="model_id" ref="maintenance.model_maintenance_equipment"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('x_equipment_rental.group_rental_manager'))]"/>
+        </record>
+
+        <record id="rental_maintenance_request_rule_user" model="ir.rule">
+            <field name="name">Rental users can access their own maintenance requests</field>
+            <field name="model_id" ref="maintenance.model_maintenance_request"/>
+            <field name="domain_force">['|', '|', ('owner_user_id', '=', user.id), ('user_id', '=', user.id), ('message_partner_ids', 'in', [user.partner_id.id])]</field>
+            <field name="groups" eval="[(4, ref('x_equipment_rental.group_rental_user'))]"/>
+        </record>
+
+        <record id="rental_maintenance_request_rule_manager" model="ir.rule">
+            <field name="name">Rental managers can access all maintenance requests</field>
+            <field name="model_id" ref="maintenance.model_maintenance_request"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('x_equipment_rental.group_rental_manager'))]"/>
+        </record>
+
+    </data>
 </odoo>
