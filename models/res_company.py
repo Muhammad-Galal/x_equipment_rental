@@ -1,0 +1,1 @@
+"""Company-level rental configuration."""

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_maintenance_equipment_form_rental" model="ir.ui.view">
+        <field name="name">maintenance.equipment.form.rental</field>
+        <field name="model">maintenance.equipment</field>
+        <field name="inherit_id" ref="maintenance.hr_equipment_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button
+                    name="action_view_rental_orders"
+                    type="object"
+                    class="oe_stat_button"
+                    icon="fa-calendar">
+                    <field name="rental_order_count" string="Rentals" widget="statinfo"/>
+                </button>
+                <button
+                    name="action_view_rental_maintenance"
+                    type="object"
+                    class="oe_stat_button"
+                    icon="fa-wrench">
+                    <field name="rental_maintenance_count" string="Maintenance" widget="statinfo"/>
+                </button>
+            </xpath>
+            <xpath expr="//group[@name='service_info_group']/group[1]" position="inside">
+                <field name="rental_status" readonly="1"/>
+            </xpath>
+            <xpath expr="//page[@name='product_information']/group/group[2]" position="inside">
+                <field name="daily_rental_rate"/>
+                <field name="weekly_rental_rate"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_maintenance_equipment_tree_rental" model="ir.ui.view">
+        <field name="name">maintenance.equipment.tree.rental</field>
+        <field name="model">maintenance.equipment</field>
+        <field name="inherit_id" ref="maintenance.hr_equipment_view_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='serial_no']" position="after">
+                <field name="rental_status"/>
+                <field name="daily_rental_rate" optional="show"/>
+                <field name="weekly_rental_rate" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_maintenance_equipment_search_rental" model="ir.ui.view">
+        <field name="name">maintenance.equipment.search.rental</field>
+        <field name="model">maintenance.equipment</field>
+        <field name="inherit_id" ref="maintenance.hr_equipment_view_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='under_maintenance']" position="after">
+                <filter name="filter_available_now" string="Available" domain="[('rental_status', '=', 'available')]"/>
+                <filter name="filter_reserved_now" string="Reserved" domain="[('rental_status', '=', 'reserved')]"/>
+                <filter name="filter_rented_now" string="Rented" domain="[('rental_status', '=', 'rented')]"/>
+                <filter name="filter_rental_maintenance" string="Maintenance" domain="[('rental_status', '=', 'maintenance')]"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_rental_equipment" model="ir.actions.act_window">
+        <field name="name">Equipment</field>
+        <field name="res_model">maintenance.equipment</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="view_id" ref="maintenance.hr_equipment_view_kanban"/>
+        <field name="search_view_id" ref="maintenance.hr_equipment_view_search"/>
+        <field name="domain">[]</field>
+        <field name="context">{'search_default_filter_available_now': 1}</field>
+    </record>
+</odoo>

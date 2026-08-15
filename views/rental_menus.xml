@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem
+        id="menu_rental_root"
+        name="Equipment Rental"
+        sequence="10"
+        groups="x_equipment_rental.group_rental_user,x_equipment_rental.group_rental_manager"/>
+
+    <menuitem
+        id="menu_rental_orders"
+        name="Rental Orders"
+        parent="menu_rental_root"
+        action="action_rental_order"
+        sequence="10"
+        groups="x_equipment_rental.group_rental_user,x_equipment_rental.group_rental_manager"/>
+
+    <menuitem
+        id="menu_rental_equipment"
+        name="Equipment"
+        parent="menu_rental_root"
+        action="action_rental_equipment"
+        sequence="20"
+        groups="x_equipment_rental.group_rental_user,x_equipment_rental.group_rental_manager"/>
+
+    <menuitem
+        id="menu_rental_maintenance"
+        name="Maintenance Schedule"
+        parent="menu_rental_root"
+        action="action_equipment_maintenance"
+        sequence="30"
+        groups="x_equipment_rental.group_rental_user,x_equipment_rental.group_rental_manager"/>
+
+    <menuitem
+        id="menu_rental_availability"
+        name="Availability"
+        parent="menu_rental_root"
+        action="action_rental_availability_wizard"
+        sequence="40"
+        groups="x_equipment_rental.group_rental_user,x_equipment_rental.group_rental_manager"/>
+</odoo>

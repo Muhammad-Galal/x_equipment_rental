@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_equipment_maintenance_list" model="ir.ui.view">
+        <field name="name">maintenance.request.rental.list</field>
+        <field name="model">maintenance.request</field>
+        <field name="arch" type="xml">
+            <list string="Equipment Maintenance" sample="1">
+                <field name="name"/>
+                <field name="equipment_id"/>
+                <field name="category_id"/>
+                <field name="maintenance_team_id"/>
+                <field name="user_id"/>
+                <field name="schedule_date"/>
+                <field name="schedule_end"/>
+                <field name="stage_id"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_equipment_maintenance_form" model="ir.ui.view">
+        <field name="name">maintenance.request.rental.form</field>
+        <field name="model">maintenance.request</field>
+        <field name="arch" type="xml">
+            <form string="Equipment Maintenance">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="equipment_id"/>
+                            <field name="category_id" readonly="1"/>
+                            <field name="owner_user_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group>
+                            <field name="maintenance_team_id"/>
+                            <field name="user_id"/>
+                            <field name="stage_id"/>
+                            <field name="request_date"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Schedule">
+                            <group>
+                                <group>
+                                    <field name="schedule_date" required="1"/>
+                                    <field name="schedule_end" required="1"/>
+                                </group>
+                                <group>
+                                    <field name="maintenance_type"/>
+                                    <field name="priority"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Notes">
+                            <field name="description"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_equipment_maintenance_search" model="ir.ui.view">
+        <field name="name">maintenance.request.rental.search</field>
+        <field name="model">maintenance.request</field>
+        <field name="arch" type="xml">
+            <search string="Equipment Maintenance">
+                <field name="name"/>
+                <field name="equipment_id"/>
+                <field name="category_id"/>
+                <field name="maintenance_team_id"/>
+                <field name="user_id"/>
+                <filter name="scheduled" string="Scheduled" domain="[('done', '=', False), ('archive', '=', False), ('schedule_date', '!=', False)]"/>
+                <filter name="done" string="Done" domain="[('done', '=', True)]"/>
+                <filter name="archived" string="Archived" domain="[('archive', '=', True)]"/>
+                <group>
+                    <filter name="group_by_equipment" string="Equipment" domain="[]" context="{'group_by': 'equipment_id'}"/>
+                    <filter name="group_by_stage" string="Stage" domain="[]" context="{'group_by': 'stage_id'}"/>
+                    <filter name="group_by_team" string="Team" domain="[]" context="{'group_by': 'maintenance_team_id'}"/>
+                    <filter name="group_by_company" string="Company" domain="[]" context="{'group_by': 'company_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_equipment_maintenance" model="ir.actions.act_window">
+        <field name="name">Maintenance Schedule</field>
+        <field name="res_model">maintenance.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_equipment_maintenance_search"/>
+        <field name="domain">[('equipment_id', '!=', False)]</field>
+        <field name="context">{'default_owner_user_id': uid}</field>
+    </record>
+</odoo>
